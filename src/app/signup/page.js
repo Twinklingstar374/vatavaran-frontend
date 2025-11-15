@@ -2,81 +2,77 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import api from "@/utils/api";
 
 export default function Signup() {
+  const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState(""); // added email field
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("STAFF");
   const router = useRouter();
 
-  const handleSignup = async () => {
-    if (!name || !email || !password) return alert("Fill all fields");
+  const handleSignup = async (e) => {
+    e.preventDefault();
 
     try {
-      const res = await fetch("http://localhost:5001/api/auth/signup", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name, email, password, role }),
+      const res = await api.post("/auth/signup", {
+        name,
+        email,
+        password,
       });
 
-      const data = await res.json();
+      const data = res.data;
 
-      if (!res.ok) {
-        throw new Error(data.message || "Error signing up");
-      }
+      // Save auth info
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("role", data.user.role || "STAFF");
+      localStorage.setItem("userName", name);
 
-      alert("User created! Now login.");
-      router.push("/login");
+      router.push("/staff");
+
     } catch (err) {
-      alert(err.message);
+      alert(err.response?.data?.message || "Signup failed");
     }
   };
 
   return (
-    <div className="h-screen flex flex-col items-center justify-center bg-black">
+    <div className="h-screen flex flex-col items-center justify-center bg-black text-white">
+
       <h1 className="text-3xl font-bold mb-4">Signup</h1>
-      <input
-        type="text"
-        placeholder="Name"
-        value={name}
-        onChange={e => setName(e.target.value)}
-        className="border p-2 mb-2 rounded w-64"
-      />
-      <input
-        type="text"
-        placeholder="Email"
-        value={email}
-        onChange={e => setEmail(e.target.value)}
-        className="border p-2 mb-2 rounded w-64"
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={e => setPassword(e.target.value)}
-        className="border p-2 mb-2 rounded w-64"
-      />
-      <select
-        value={role}
-        onChange={e => setRole(e.target.value)}
-        className="border p-2 mb-2 rounded w-64"
-      >
-        <option value="STAFF">Staff</option>
-        <option value="SUPERVISOR">Supervisor</option>
-        <option value="ADMIN">Admin</option>
-      </select>
-      <button
-        onClick={handleSignup}
-        className="bg-blue-500 text-white px-4 py-2 rounded"
-      >
-        Signup
-      </button>
+
+      <form onSubmit={handleSignup} className="flex flex-col gap-3 w-64">
+
+        <input
+          type="text"
+          placeholder="Full Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="border p-2 rounded bg-white text-black"
+        />
+
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="border p-2 rounded bg-white text-black"
+        />
+
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="border p-2 rounded bg-white text-black"
+        />
+
+        <button
+          type="submit"
+          className="bg-green-500 hover:bg-green-600 py-2 rounded"
+        >
+          Signup
+        </button>
+
+      </form>
     </div>
   );
 }
-
-
-
