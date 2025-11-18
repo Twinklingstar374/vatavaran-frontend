@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+🌍 VatavaranTrack – Waste Collection Tracking System (Frontend)
 
-## Getting Started
+VatavaranTrack is a role-based waste collection monitoring system that enables staff to submit pickups with proof, supervisors to verify them, and admins to analyze waste data.
+This repository contains the frontend web application, built with Next.js + TailwindCSS.
 
-First, run the development server:
+🚀 Live Demo (Frontend)
+👉 https://vatavaranapp.vercel.app/
+(This is the deployed production build of the frontend)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+🔗 Connected Backend API
+The frontend communicates with the backend deployed on Render:
+👉 https://vatavaran-backend.onrender.com/api
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+📌 Features (Frontend)
+👷 Staff Panel
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+Submit waste pickups
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Capture GPS location
 
-## Learn More
+Upload proof photo
 
-To learn more about Next.js, take a look at the following resources:
+View submitted pickups
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Edit & delete pending pickups
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Paginated pickup history
 
-## Deploy on Vercel
+Sort & filter options
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Thumbnail + full-image popup viewer
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+🧑‍💼 Supervisor Panel (if implemented now or later)
+
+View all staff pickups
+
+Approve or reject submissions
+
+Filter by staff, date, and category
+
+Staff performance summary
+
+🛠 Admin Panel (upcoming or optional)
+
+View all stats
+
+Day-wise, category-wise analytics
+
+Staff management
+
+🔐 Authentication
+
+User signup
+
+Role-based login
+
+JWT stored securely (localStorage)
+
+Auto-redirect based on role
+
+🖼 UI & Tech Stack
+
+Next.js 15 (App Router)
+
+Tailwind CSS
+
+Axios
+
+React Hooks
+
+Responsive UI (mobile + desktop)
