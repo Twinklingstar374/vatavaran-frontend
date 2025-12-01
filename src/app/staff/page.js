@@ -1,298 +1,388 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import api from "@/utils/api"; // axios instance
-
-// CO2 factors per category (kg CO₂ per kg waste)
-const CO2_FACTORS = { plastic: 1.7, green: 0.3, dry: 0.5 };
-
-// Badge thresholds
-const BADGE_THRESHOLDS = [10, 50, 100];
-
-// Simple Popup Message
-const MessageBox = ({ message, onClose }) => {
-  if (!message) return null;
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
-        <p className="text-gray-800 mb-4">{message}</p>
-        <button
-          onClick={onClose}
-          className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700"
-        >
-          Close
-        </button>
-      </div>
-    </div>
-  );
-};
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import api from '@/utils/api';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import { getTotalImpact, getImpactMessage } from '@/utils/impactCalculator';
 
 export default function StaffDashboard() {
-  const [user, setUser] = useState(null); // name
-  const [role, setRole] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  // Submission states
-  const [category, setCategory] = useState("plastic");
-  const [weight, setWeight] = useState("");
-  const [location, setLocation] = useState(null);
-  const [image, setImage] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState("");
-
-  const [co2Saved, setCo2Saved] = useState(0);
-  const [badges, setBadges] = useState([]);
   const [pickups, setPickups] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [attendance, setAttendance] = useState(null);
+  const router = useRouter();
 
-  const navigate = (path) => (window.location.href = path);
-
-  // AUTH CHECK
+  // Check and mark attendance
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const savedRole = localStorage.getItem("role");
-    const savedName = localStorage.getItem("userName");
-
-    if (!token || !savedRole || !savedName) {
-      navigate("/login");
-      return;
+    const today = new Date().toDateString();
+    const storedAttendance = localStorage.getItem('staffAttendance');
+    
+    if (storedAttendance) {
+      const attendanceData = JSON.parse(storedAttendance);
+      if (attendanceData.date === today) {
+        setAttendance(attendanceData);
+      } else {
+        // New day, reset attendance
+        localStorage.removeItem('staffAttendance');
+      }
     }
-
-    if (savedRole !== "STAFF") {
-      navigate("/");
-      return;
-    }
-
-    setUser(savedName);
-    setRole(savedRole);
-    setLoading(false);
   }, []);
 
-  // LOGOUT
-  const handleLogout = () => {
-    localStorage.clear();
-    navigate("/login");
-  };
+  const markAttendance = useCallback(() => {
+    const today = new Date().toDateString();
+    const now = new Date().toLocaleTimeString();
+    const attendanceData = {
+      date: today,
+      checkInTime: now,
+      firstPickup: true
+    };
+    localStorage.setItem('staffAttendance', JSON.stringify(attendanceData));
+    setAttendance(attendanceData);
+  }, []);
 
-  // LOCATION FUNCTION
-  const handleLocation = () => {
-    if (!navigator.geolocation) {
-      return setMessage("Geolocation not supported.");
-    }
-
-    setMessage("Fetching location...");
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setMessage(
-          `Location captured: ${pos.coords.latitude.toFixed(
-            3
-          )}, ${pos.coords.longitude.toFixed(3)}`
-        );
-      },
-      (err) => {
-        console.error(err);
-        setMessage("Unable to get location.");
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 5000,
-      }
-    );
-  };
-
-  // IMAGE PICKER
-  const handleImage = (e) => {
-    if (e.target.files.length > 0) setImage(e.target.files[0]);
-  };
-
-  // SUBMIT PICKUP (Mock for now)
-  const handleSubmitPickup = async () => {
-    if (isSubmitting) return;
-
-    const numericWeight = parseFloat(weight);
-
-    if (!numericWeight || numericWeight <= 0)
-      return setMessage("Enter a valid weight.");
-
-    if (!location) return setMessage("Capture location first.");
-
-    setIsSubmitting(true);
-
-    const co2 = numericWeight * CO2_FACTORS[category];
-
+  const fetchPickups = useCallback(async () => {
+    setLoading(true);
     try {
-      // 🚀 Future API call (you will integrate later)
-      // const token = localStorage.getItem("token");
-      // await api.post("/api/waste/submit", payload, {
-      //   headers: { Authorization: `Bearer ${token}` },
-      // });
-
-      await new Promise((resolve) => setTimeout(resolve, 1200)); // Mock delay
-
-      // Update badges + pickups
-      setCo2Saved((prev) => {
-        const total = prev + co2;
-
-        const newBadges = BADGE_THRESHOLDS.filter(
-          (b) => total >= b && !badges.includes(`${b} kg CO₂ saved!`)
-        ).map((b) => `${b} kg CO₂ saved!`);
-
-        if (newBadges.length > 0) setBadges((p) => [...p, ...newBadges]);
-
-        return total;
+      const response = await api.get('/pickups/my', {
+        params: { sortBy, sortOrder }
       });
-
-      const newPickup = {
-        id: Date.now(),
-        category,
-        weight: numericWeight,
-        co2: co2.toFixed(2),
-        timestamp: new Date().toISOString(),
-        location: {
-          lat: location.lat.toFixed(3),
-          lng: location.lng.toFixed(3),
-        },
-        staffName: user,
-        status: "Submitted (Mock)",
-      };
-
-      setPickups((prev) => [newPickup, ...prev]);
-      setMessage(`Success! CO₂ saved: ${co2.toFixed(2)} kg`);
-
-      setWeight("");
-      setImage(null);
-      setLocation(null);
+      setPickups(response.data);
+      
+      // Auto mark attendance on first pickup of the day
+      if (response.data.length > 0 && !attendance) {
+        const today = new Date().toDateString();
+        const todayPickups = response.data.filter(p => 
+          new Date(p.createdAt).toDateString() === today
+        );
+        if (todayPickups.length > 0) {
+          markAttendance();
+        }
+      }
     } catch (err) {
-      setMessage("Failed to submit entry.");
+      setError('Failed to load pickups');
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
+  }, [sortBy, sortOrder, attendance, markAttendance]);
 
-    setIsSubmitting(false);
+  useEffect(() => {
+    fetchPickups();
+  }, [fetchPickups]);
+
+  const handleDelete = async (id) => {
+    try {
+      await api.delete(`/pickups/${id}`);
+      setDeleteConfirm(null);
+      fetchPickups();
+    } catch (err) {
+      alert('Failed to delete pickup: ' + (err.response?.data?.message || err.message));
+    }
   };
 
-  if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-xl text-green-600">Checking login...</p>
-      </div>
-    );
+  // Calculate stats
+  const today = new Date().toDateString();
+  const todayPickups = pickups.filter(p => new Date(p.createdAt).toDateString() === today);
+  const totalWeight = pickups.reduce((sum, p) => sum + p.weight, 0);
+  const approvedCount = pickups.filter(p => p.status === 'APPROVED').length;
+  const pendingCount = pickups.filter(p => p.status === 'PENDING').length;
+  const approvalRate = pickups.length > 0 ? ((approvedCount / pickups.length) * 100).toFixed(1) : 0;
+  const impact = getTotalImpact(pickups);
+
+  // Productivity score (0-100)
+  const productivityScore = Math.min(100, Math.floor(
+    (pickups.length * 10) + (totalWeight * 2) + (approvedCount * 5)
+  ));
 
   return (
-    <div className="min-h-screen bg-green-50">
-      <MessageBox message={message} onClose={() => setMessage("")} />
+    <ProtectedRoute allowedRoles={['STAFF']}>
+      <div className="w-full min-h-screen bg-gradient-to-br from-blue-100 via-blue-50 to-indigo-100 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-4xl font-bold text-gray-900">Staff Dashboard</h1>
+            <div className="flex gap-3">
+              <Link
+                href="/staff/dumpzones"
+                className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+              >
+                <span>📍</span>
+                Dump Zones Map
+              </Link>
+              <Link
+                href="/staff/new"
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl"
+              >
+                + Create Pickup
+              </Link>
+            </div>
+          </div>
 
-      {/* NAVBAR */}
-      <nav className="bg-green-700 text-white p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold">VatavaranTrack</h1>
-        <div className="flex items-center gap-3">
-          <span>
-            Hi, {user} ({role})
-          </span>
-          <button
-            onClick={handleLogout}
-            className="bg-white text-green-700 px-4 py-2 rounded-full"
-          >
-            Logout
-          </button>
-        </div>
-      </nav>
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {/* Attendance Card */}
+            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-3xl">✓</div>
+                {attendance && <div className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full font-semibold">Checked In</div>}
+              </div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{todayPickups.length}</div>
+              <div className="text-sm text-gray-600">Pickups Today</div>
+              {attendance && (
+                <div className="text-xs text-gray-500 mt-2">Check-in: {attendance.checkInTime}</div>
+              )}
+            </div>
 
-      {/* MAIN */}
-      <div className="max-w-6xl mx-auto mt-10 p-4 grid md:grid-cols-3 gap-6">
-        {/* SUBMIT FORM */}
-        <div className="bg-white p-6 rounded-xl shadow">
-          <h2 className="text-xl font-bold mb-4">Submit Waste Entry</h2>
+            {/* Total Collections */}
+            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+              <div className="text-3xl mb-2">📦</div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{pickups.length}</div>
+              <div className="text-sm text-gray-600">Total Collections</div>
+            </div>
 
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full p-2 border rounded mb-3"
-          >
-            <option value="plastic">Plastic</option>
-            <option value="green">Green</option>
-            <option value="dry">Dry</option>
-          </select>
+            {/* Total Weight */}
+            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+              <div className="text-3xl mb-2">⚖️</div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{totalWeight.toFixed(1)}kg</div>
+              <div className="text-sm text-gray-600">Total Weight</div>
+            </div>
 
-          <input
-            type="number"
-            placeholder="Weight (kg)"
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-            className="w-full p-2 border rounded mb-3"
-          />
+            {/* Approval Rate */}
+            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+              <div className="text-3xl mb-2">✅</div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{approvalRate}%</div>
+              <div className="text-sm text-gray-600">Approval Rate</div>
+              <div className="text-xs text-gray-500 mt-1">{approvedCount}/{pickups.length} approved</div>
+            </div>
+          </div>
 
-          <button
-            onClick={handleLocation}
-            className="bg-blue-500 text-white w-full py-2 rounded mb-3"
-          >
-            {location ? "Location Selected" : "Capture Location"}
-          </button>
+          {/* Productivity & Impact */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Productivity Score */}
+            <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl shadow-xl p-8 text-white">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-2xl font-bold">Productivity Score</h3>
+                <div className="text-4xl">📊</div>
+              </div>
+              <div className="text-6xl font-bold mb-2">{productivityScore}</div>
+              <div className="text-lg opacity-90 mb-4">out of 100</div>
+              <div className="bg-white/20 rounded-full h-3 overflow-hidden">
+                <div 
+                  className="bg-white h-full rounded-full transition-all duration-500"
+                  style={{ width: `${productivityScore}%` }}
+                ></div>
+              </div>
+            </div>
 
-          {location && (
-            <p className="text-sm text-gray-700 mb-3">
-              {location.lat.toFixed(3)}, {location.lng.toFixed(3)}
-            </p>
+            {/* Environmental Impact */}
+            <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-2xl shadow-xl p-8 text-white">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-2xl font-bold">Environmental Impact</h3>
+                <div className="text-4xl">🌱</div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="opacity-90">CO₂ Saved</span>
+                  <span className="text-2xl font-bold">{impact.co2}kg</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="opacity-90">Trees Equivalent</span>
+                  <span className="text-2xl font-bold">{impact.trees}</span>
+                </div>
+                {impact.bottles > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="opacity-90">Bottles Saved</span>
+                    <span className="text-2xl font-bold">{impact.bottles}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Sorting Controls */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 mb-6 shadow-lg">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Sort Pickups</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="createdAt">Date Created</option>
+                  <option value="weight">Weight</option>
+                  <option value="category">Category</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Order</label>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="desc">Descending</option>
+                  <option value="asc">Ascending</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 border border-red-200">
+              {error}
+            </div>
           )}
 
-          <input
-            type="file"
-            onChange={handleImage}
-            className="w-full p-2 border rounded mb-3"
-          />
-
-          <button
-            onClick={handleSubmitPickup}
-            disabled={isSubmitting}
-            className="bg-green-600 text-white w-full py-2 rounded"
-          >
-            {isSubmitting ? "Submitting..." : "Submit Entry"}
-          </button>
-        </div>
-
-        {/* PICKUP HISTORY */}
-        <div className="md:col-span-2 bg-white p-6 rounded-xl shadow">
-          <h2 className="text-xl font-bold mb-4">My Recent Pickups</h2>
-
-          <table className="w-full text-left">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-2">Date</th>
-                <th className="p-2">Category</th>
-                <th className="p-2">Weight</th>
-                <th className="p-2">CO₂ Saved</th>
-                <th className="p-2">Location</th>
-                <th className="p-2">Status</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {pickups.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="text-center p-4 text-gray-500">
-                    No records yet.
-                  </td>
-                </tr>
-              ) : (
-                pickups.map((p) => {
-                  const d = new Date(p.timestamp);
-                  return (
-                    <tr key={p.id} className="border-b">
-                      <td className="p-2">{d.toLocaleString()}</td>
-                      <td className="p-2 capitalize">{p.category}</td>
-                      <td className="p-2">{p.weight} kg</td>
-                      <td className="p-2">{p.co2} kg</td>
-                      <td className="p-2">
-                        {p.location.lat}, {p.location.lng}
+          {/* Pickups Table */}
+          {loading ? (
+            <div className="text-center py-20 text-gray-500">
+              <div className="text-5xl mb-4">⏳</div>
+              <div className="text-xl">Loading pickups...</div>
+            </div>
+          ) : pickups.length === 0 ? (
+            <div className="text-center py-20 bg-white rounded-2xl border border-gray-200 shadow-lg">
+              <div className="text-6xl mb-4">📦</div>
+              <p className="text-xl text-gray-500 mb-4">No pickups found</p>
+              <Link
+                href="/staff/new"
+                className="inline-block px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
+              >
+                Create Your First Pickup
+              </Link>
+            </div>
+          ) : (
+            <div className="bg-white shadow-xl overflow-hidden rounded-2xl border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Category</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Weight</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Image</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Impact</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {pickups.map((pickup) => (
+                    <tr key={pickup.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {new Date(pickup.createdAt).toLocaleDateString()}
                       </td>
-                      <td className="p-2 text-yellow-700">{p.status}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {pickup.category}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {pickup.weight}kg
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {pickup.imageUrl && (
+                          <img
+                            src={pickup.imageUrl}
+                            alt="Pickup"
+                            className="h-16 w-16 object-cover rounded-lg cursor-pointer border-2 border-gray-200 hover:border-blue-500 transition-all"
+                            onClick={() => setSelectedImage(pickup.imageUrl)}
+                          />
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          pickup.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
+                          pickup.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {pickup.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        <div className="max-w-xs truncate" title={getImpactMessage(pickup.category, pickup.weight)}>
+                          {getImpactMessage(pickup.category, pickup.weight)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
+                        {pickup.status === 'PENDING' && (
+                          <>
+                            <button
+                              onClick={() => router.push(`/staff/edit/${pickup.id}`)}
+                              className="text-blue-600 hover:text-blue-900 font-semibold"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirm(pickup.id)}
+                              className="text-red-600 hover:text-red-900 font-semibold"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Image Modal */}
+          {selectedImage && (
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50"
+              onClick={() => setSelectedImage(null)}
+            >
+              <div className="relative max-w-4xl max-h-screen p-4">
+                <button
+                  onClick={() => setSelectedImage(null)}
+                  className="absolute top-2 right-2 text-white text-2xl font-bold bg-black/50 rounded-full w-12 h-12 flex items-center justify-center hover:bg-black/70 transition-all"
+                >
+                  ×
+                </button>
+                <img
+                  src={selectedImage}
+                  alt="Full size"
+                  className="max-w-full max-h-screen object-contain rounded-2xl shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Delete Confirmation Modal */}
+          {deleteConfirm && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-8 rounded-2xl max-w-md mx-4 shadow-2xl">
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">Confirm Delete</h3>
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to delete this pickup? This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setDeleteConfirm(null)}
+                    className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 font-semibold transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleDelete(deleteConfirm)}
+                    className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 font-semibold transition-all"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 }
