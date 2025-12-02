@@ -26,34 +26,32 @@ export default function EditPickupPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const fetchPickup = async () => {
-      try {
-        const response = await api.get('/pickups/my');
-        const pickup = response.data.find(p => p.id === parseInt(pickupId));
-        
-        if (!pickup) {
-          setError('Pickup not found');
-          return;
-        }
+  const fetchPickup = async () => {
+    try {
+      const response = await api.get(`/pickups/${pickupId}`);
+      const pickup = response.data;
 
-        if (pickup.status !== 'PENDING') {
-          setError('Can only edit pending pickups');
-          return;
-        }
-
-        setCategory(pickup.category);
-        setWeight(pickup.weight.toString());
-        setCurrentImageUrl(pickup.imageUrl);
-        setLocation({ latitude: pickup.latitude, longitude: pickup.longitude });
-      } catch (err) {
-        setError('Failed to load pickup');
-      } finally {
-        setLoading(false);
+      if (pickup.status !== 'PENDING') {
+        setError('Can only edit pending pickups');
+        return;
       }
-    };
 
-    fetchPickup();
-  }, [pickupId]);
+      setCategory(pickup.category);
+      setWeight(pickup.weight.toString());
+      setCurrentImageUrl(pickup.imageUrl);
+      setLocation({ latitude: pickup.latitude, longitude: pickup.longitude });
+
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load pickup');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchPickup();
+}, [pickupId]);
+
 
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
@@ -141,7 +139,7 @@ export default function EditPickupPage() {
 
       // Note: Backend needs to support PUT/PATCH for pickups
       // For now, we'll use PATCH as defined in the backend
-      await api.patch(`/pickups/${pickupId}`, {
+      await api.put(`/pickups/${pickupId}`, {
         category,
         weight: parseFloat(weight),
         latitude: location.latitude,

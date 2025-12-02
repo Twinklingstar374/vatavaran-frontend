@@ -51,14 +51,18 @@ export default function LoginPage() {
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Email Address
               </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-lg"
-                required
-              />
+            <input
+  type="email"
+  value={email}
+  onChange={(e) => setEmail(e.target.value)}
+  placeholder="you@example.com"
+  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl 
+             focus:outline-none focus:ring-2 focus:ring-blue-500 
+             focus:border-transparent transition-all text-lg 
+             placeholder-gray-400 text-gray-900"
+  required
+/>
+
             </div>
 
             <div>
@@ -66,13 +70,17 @@ export default function LoginPage() {
                 Password
               </label>
               <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-lg"
-                required
-              />
+  type="password"
+  value={password}
+  onChange={(e) => setPassword(e.target.value)}
+  placeholder="••••••••"
+  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl 
+             focus:outline-none focus:ring-2 focus:ring-blue-500 
+             focus:border-transparent transition-all text-lg 
+             placeholder-gray-400 text-gray-900"
+  required
+/>
+
             </div>
 
             <button

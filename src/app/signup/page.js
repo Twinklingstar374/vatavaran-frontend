@@ -1,33 +1,33 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import api from '@/utils/api';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import api from "@/utils/api";
 
 export default function SignupPage() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setSuccess(false);
     setLoading(true);
 
     try {
-      await api.post('/auth/signup', { name, email, password });
+      await api.post("/auth/signup", { name, email, password });
       setSuccess(true);
       setTimeout(() => {
-        router.push('/login');
+        router.push("/login");
       }, 2000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Signup failed');
+      setError(err.response?.data?.message || "Signup failed");
     } finally {
       setLoading(false);
     }
@@ -39,8 +39,12 @@ export default function SignupPage() {
         {/* Logo/Icon */}
         <div className="text-center mb-8 animate-fadeIn">
           <div className="text-6xl mb-4">🌱</div>
-          <h1 className="text-3xl font-bold text-gray-900">Join VatavaranTrack</h1>
-          <p className="text-gray-600 mt-2">Create your account and start making a difference</p>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Join VatavaranTrack
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Create your account and start making a difference
+          </p>
         </div>
 
         {/* Signup Card */}
@@ -67,7 +71,10 @@ export default function SignupPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="John Doe"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all text-lg"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl 
+             focus:outline-none focus:ring-2 focus:ring-green-500 
+             focus:border-transparent transition-all text-lg 
+             placeholder-gray-300 text-gray-900"
                 required
               />
             </div>
@@ -81,7 +88,10 @@ export default function SignupPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all text-lg"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl 
+                  focus:outline-none focus:ring-2 focus:ring-green-500 
+                  focus:border-transparent transition-all text-lg 
+                  placeholder-gray-300 text-gray-900"
                 required
               />
             </div>
@@ -95,7 +105,10 @@ export default function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all text-lg"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl 
+             focus:outline-none focus:ring-2 focus:ring-green-500 
+             focus:border-transparent transition-all text-lg 
+             placeholder-gray-300 text-gray-900"
                 required
               />
             </div>
@@ -105,14 +118,21 @@ export default function SignupPage() {
               disabled={loading || success}
               className="w-full py-4 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-xl font-semibold text-lg hover:from-green-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Creating Account...' : success ? 'Success! ✓' : 'Create Account →'}
+              {loading
+                ? "Creating Account..."
+                : success
+                ? "Success! ✓"
+                : "Create Account →"}
             </button>
           </form>
 
           <div className="mt-6 text-center">
             <p className="text-gray-600">
-              Already have an account?{' '}
-              <Link href="/login" className="text-green-600 hover:text-green-700 font-semibold">
+              Already have an account?{" "}
+              <Link
+                href="/login"
+                className="text-green-600 hover:text-green-700 font-semibold"
+              >
                 Login here
               </Link>
             </p>

@@ -46,31 +46,36 @@ export default function StaffDashboard() {
     setAttendance(attendanceData);
   }, []);
 
-  const fetchPickups = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await api.get('/pickups/my', {
-        params: { sortBy, sortOrder }
-      });
-      setPickups(response.data);
-      
-      // Auto mark attendance on first pickup of the day
-      if (response.data.length > 0 && !attendance) {
-        const today = new Date().toDateString();
-        const todayPickups = response.data.filter(p => 
-          new Date(p.createdAt).toDateString() === today
-        );
-        if (todayPickups.length > 0) {
-          markAttendance();
-        }
-      }
-    } catch (err) {
-      setError('Failed to load pickups');
-      console.error(err);
-    } finally {
-      setLoading(false);
+ const fetchPickups = useCallback(async () => {
+  setLoading(true);
+  setError('');
+  try {
+    const response = await api.get('/pickups/my', {
+      params: { sortBy, sortOrder }
+    });
+
+    // ensure we use the array
+    const list = response.data?.pickups ?? response.data ?? [];
+    setPickups(list);
+
+    // attendance logic (use list not response.data)
+    if (list.length > 0 && !attendance) {
+      const today = new Date().toDateString();
+      const todayPickups = list.filter(p => new Date(p.createdAt).toDateString() === today);
+      if (todayPickups.length > 0) markAttendance();
     }
-  }, [sortBy, sortOrder, attendance, markAttendance]);
+  } catch (err) {
+    // show helpful details in console + UI
+    console.error('fetchPickups error:', err);
+    console.error('err.response?.status =', err.response?.status);
+    console.error('err.response?.data =', err.response?.data);
+    setError(err.response?.data?.message || err.message || 'Failed to load pickups');
+  } finally {
+    setLoading(false);
+  }
+}, [sortBy, sortOrder, attendance, markAttendance]);
+
+
 
   useEffect(() => {
     fetchPickups();

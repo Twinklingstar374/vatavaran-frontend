@@ -71,3 +71,9 @@ body {
 .animate-bounce-slow {
   animation: bounce-slow 3s ease-in-out infinite;
 }
+html, body {
+  background: linear-gradient(to bottom right, #eff6ff, #f5f3ff, #ffe4f7);
+  min-height: 100%;
+  background-color: #ffffff !important;
+  color: #1f2937;
+}
