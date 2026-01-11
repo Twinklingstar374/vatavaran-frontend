@@ -5,7 +5,21 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import api from '@/utils/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import { getTotalImpact, getImpactMessage } from '@/utils/impactCalculator';
+import {
+  HiMapPin,
+  HiPlus,
+  HiCalendarDays,
+  HiCube,
+  HiCheckBadge,
+  HiTrophy,
+  HiSparkles,
+  HiArrowPath,
+  HiArchiveBox,
+  HiXMark,
+  HiTrash,
+  HiPencilSquare,
+  HiEye
+} from "react-icons/hi2";
 
 export default function StaffDashboard() {
   const [pickups, setPickups] = useState([]);
@@ -16,13 +30,15 @@ export default function StaffDashboard() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [attendance, setAttendance] = useState(null);
+  const [page, setPage] = useState(1); // Assuming page state for pagination
+  const [totalPages, setTotalPages] = useState(1); // Assuming totalPages state for pagination
   const router = useRouter();
 
   // Check and mark attendance
   useEffect(() => {
     const today = new Date().toDateString();
     const storedAttendance = localStorage.getItem('staffAttendance');
-    
+
     if (storedAttendance) {
       const attendanceData = JSON.parse(storedAttendance);
       if (attendanceData.date === today) {
@@ -46,36 +62,30 @@ export default function StaffDashboard() {
     setAttendance(attendanceData);
   }, []);
 
- const fetchPickups = useCallback(async () => {
-  setLoading(true);
-  setError('');
-  try {
-    const response = await api.get('/pickups/my', {
-      params: { sortBy, sortOrder }
-    });
+  const fetchPickups = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await api.get('/pickups/my', {
+        params: { sortBy, sortOrder, page } // Added page to params
+      });
 
-    // ensure we use the array
-    const list = response.data?.pickups ?? response.data ?? [];
-    setPickups(list);
+      const list = response.data?.pickups ?? response.data ?? [];
+      setPickups(list);
+      setTotalPages(response.data?.totalPages || 1); // Assuming totalPages comes from API
 
-    // attendance logic (use list not response.data)
-    if (list.length > 0 && !attendance) {
-      const today = new Date().toDateString();
-      const todayPickups = list.filter(p => new Date(p.createdAt).toDateString() === today);
-      if (todayPickups.length > 0) markAttendance();
+      if (list.length > 0 && !attendance) {
+        const today = new Date().toDateString();
+        const todayPickups = list.filter(p => new Date(p.createdAt).toDateString() === today);
+        if (todayPickups.length > 0) markAttendance();
+      }
+    } catch (err) {
+      console.error('fetchPickups error:', err);
+      setError(err.response?.data?.message || err.message || 'Failed to load pickups');
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    // show helpful details in console + UI
-    console.error('fetchPickups error:', err);
-    console.error('err.response?.status =', err.response?.status);
-    console.error('err.response?.data =', err.response?.data);
-    setError(err.response?.data?.message || err.message || 'Failed to load pickups');
-  } finally {
-    setLoading(false);
-  }
-}, [sortBy, sortOrder, attendance, markAttendance]);
-
-
+  }, [sortBy, sortOrder, attendance, markAttendance, page]); // Added page to dependencies
 
   useEffect(() => {
     fetchPickups();
@@ -91,121 +101,144 @@ export default function StaffDashboard() {
     }
   };
 
-  // Calculate stats
   const today = new Date().toDateString();
   const todayPickups = pickups.filter(p => new Date(p.createdAt).toDateString() === today);
   const totalWeight = pickups.reduce((sum, p) => sum + p.weight, 0);
   const approvedCount = pickups.filter(p => p.status === 'APPROVED').length;
   const pendingCount = pickups.filter(p => p.status === 'PENDING').length;
   const approvalRate = pickups.length > 0 ? ((approvedCount / pickups.length) * 100).toFixed(1) : 0;
-  const impact = getTotalImpact(pickups);
-
-  // Productivity score (0-100)
-  const productivityScore = Math.min(100, Math.floor(
-    (pickups.length * 10) + (totalWeight * 2) + (approvedCount * 5)
-  ));
 
   return (
     <ProtectedRoute allowedRoles={['STAFF']}>
-      <div className="w-full min-h-screen bg-gradient-to-br from-blue-100 via-blue-50 to-indigo-100 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full min-h-screen bg-[#F0F4F8] py-12">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
           {/* Header */}
-          <div className="flex justify-between items-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-900">Staff Dashboard</h1>
-            <div className="flex gap-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+            <div>
+              <h1 className="text-5xl font-black text-gray-900 tracking-tight mb-2">My Dashboard</h1>
+              <p className="text-gray-500 font-medium">Manage your daily pickups and rewards</p>
+            </div>
+            <div className="flex flex-wrap gap-4">
               <Link
                 href="/staff/dumpzones"
-                className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+                className="group px-7 py-4 bg-white text-gray-900 rounded-2xl font-bold hover:bg-gray-50 transition-all shadow-md hover:shadow-lg flex items-center gap-3 border border-gray-200"
               >
-                <span>📍</span>
-                Dump Zones Map
+                <HiMapPin className="text-2xl text-blue-600 group-hover:scale-110 transition-transform" />
+                Nearby Zones
               </Link>
               <Link
                 href="/staff/new"
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl"
+                className="group px-7 py-4 bg-gray-900 text-white rounded-2xl font-bold hover:bg-gray-800 transition-all shadow-lg hover:shadow-xl flex items-center gap-3"
               >
-                + Create Pickup
+                <HiPlus className="text-2xl group-hover:rotate-90 transition-transform" />
+                Log Pickup
               </Link>
             </div>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {/* Attendance Card */}
-            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-3xl">✓</div>
-                {attendance && <div className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full font-semibold">Checked In</div>}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            {/* Status Card */}
+            <div className="bg-white rounded-3xl shadow-lg p-7 border border-gray-100 transition-all hover:shadow-xl group">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center">
+                  <HiCalendarDays className="text-2xl text-amber-500" />
+                </div>
+                {attendance && <div className="text-xs bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-bold uppercase tracking-wider">Checked In</div>}
               </div>
-              <div className="text-2xl font-bold text-gray-900 mb-1">{todayPickups.length}</div>
-              <div className="text-sm text-gray-600">Pickups Today</div>
+              <p className="text-4xl font-black text-gray-900 mb-1">{todayPickups.length}</p>
+              <p className="text-sm font-bold text-gray-500 uppercase">Pickups Today</p>
               {attendance && (
-                <div className="text-xs text-gray-500 mt-2">Check-in: {attendance.checkInTime}</div>
+                <p className="text-xs text-gray-400 mt-2 flex items-center gap-1 font-medium">
+                  <span className="text-emerald-500">●</span> Logged at {attendance.checkInTime}
+                </p>
               )}
             </div>
 
-            {/* Total Collections */}
-            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-              <div className="text-3xl mb-2">📦</div>
-              <div className="text-2xl font-bold text-gray-900 mb-1">{pickups.length}</div>
-              <div className="text-sm text-gray-600">Total Collections</div>
+            {/* Total Weight Card */}
+            <div className="bg-white rounded-3xl shadow-lg p-7 border border-gray-100 transition-all hover:shadow-xl group">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center">
+                  <HiCube className="text-2xl text-blue-500" />
+                </div>
+                <div className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-bold uppercase tracking-wider">Performance</div>
+              </div>
+              <p className="text-4xl font-black text-gray-900 mb-1">{totalWeight.toFixed(1)}kg</p>
+              <p className="text-sm font-bold text-gray-500 uppercase tracking-tight">Total Collected Weight</p>
             </div>
 
-            {/* Total Weight */}
-            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-              <div className="text-3xl mb-2">⚖️</div>
-              <div className="text-2xl font-bold text-gray-900 mb-1">{totalWeight.toFixed(1)}kg</div>
-              <div className="text-sm text-gray-600">Total Weight</div>
-            </div>
-
-            {/* Approval Rate */}
-            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-              <div className="text-3xl mb-2">✅</div>
-              <div className="text-2xl font-bold text-gray-900 mb-1">{approvalRate}%</div>
-              <div className="text-sm text-gray-600">Approval Rate</div>
-              <div className="text-xs text-gray-500 mt-1">{approvedCount}/{pickups.length} approved</div>
+            {/* Quality Score Card */}
+            <div className="bg-white rounded-3xl shadow-lg p-7 border border-gray-100 transition-all hover:shadow-xl group">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center">
+                  <HiCheckBadge className="text-2xl text-purple-500" />
+                </div>
+                <div className="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold uppercase tracking-wider">Quality</div>
+              </div>
+              <p className="text-4xl font-black text-gray-900 mb-1">{approvalRate}%</p>
+              <p className="text-sm font-bold text-gray-500 uppercase">Approval Rating</p>
+              <p className="text-xs text-gray-400 mt-2 font-medium">
+                {approvedCount} of {pickups.length} verified
+              </p>
             </div>
           </div>
 
-          {/* Productivity & Impact */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Productivity Score */}
-            <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl shadow-xl p-8 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-2xl font-bold">Productivity Score</h3>
-                <div className="text-4xl">📊</div>
+          {/* Rewards & Performance Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+            {/* Reward Points Card */}
+            <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100 flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <p className="text-sm font-bold text-blue-600 uppercase tracking-wider mb-1">Total Rewards</p>
+                  <h3 className="text-4xl font-black text-gray-900">
+                    {pickups.filter(p => p.status === 'APPROVED').length * 10} <span className="text-lg font-medium text-gray-500">Points</span>
+                  </h3>
+                </div>
+                <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center">
+                   <HiTrophy className="text-3xl text-blue-600" />
+                </div>
               </div>
-              <div className="text-6xl font-bold mb-2">{productivityScore}</div>
-              <div className="text-lg opacity-90 mb-4">out of 100</div>
-              <div className="bg-white/20 rounded-full h-3 overflow-hidden">
-                <div 
-                  className="bg-white h-full rounded-full transition-all duration-500"
-                  style={{ width: `${productivityScore}%` }}
-                ></div>
+
+              <div>
+                <div className="flex justify-between text-sm font-bold text-gray-600 mb-2">
+                  <span>Progress to Next Tier</span>
+                  <span>{((pickups.filter(p => p.status === 'APPROVED').length * 10) % 100)}/100</span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden border border-gray-200">
+                  <div
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full transition-all duration-1000 ease-out shadow-inner"
+                    style={{ width: `${(pickups.filter(p => p.status === 'APPROVED').length * 10) % 100}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-gray-500 mt-3 font-medium">
+                  *Points increase only after supervisor approval of your collections.
+                </p>
               </div>
             </div>
 
-            {/* Environmental Impact */}
-            <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-2xl shadow-xl p-8 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-2xl font-bold">Environmental Impact</h3>
-                <div className="text-4xl">🌱</div>
+            {/* Quick Summary Card */}
+            <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl shadow-xl p-8 text-white">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold">Quick Summary</h3>
+                <HiSparkles className="text-3xl text-blue-400" />
               </div>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="opacity-90">CO₂ Saved</span>
-                  <span className="text-2xl font-bold">{impact.co2}kg</span>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+                  <p className="text-xs text-blue-300 font-bold uppercase mb-1">Approved</p>
+                  <p className="text-2xl font-bold">{approvedCount}</p>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="opacity-90">Trees Equivalent</span>
-                  <span className="text-2xl font-bold">{impact.trees}</span>
+                <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+                  <p className="text-xs text-yellow-300 font-bold uppercase mb-1">Pending</p>
+                  <p className="text-2xl font-bold">{pendingCount}</p>
                 </div>
-                {impact.bottles > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span className="opacity-90">Bottles Saved</span>
-                    <span className="text-2xl font-bold">{impact.bottles}</span>
-                  </div>
-                )}
+                <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+                  <p className="text-xs text-green-300 font-bold uppercase mb-1">Today</p>
+                  <p className="text-2xl font-bold">{todayPickups.length}</p>
+                </div>
+                <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+                  <p className="text-xs text-purple-300 font-bold uppercase mb-1">Total Weight</p>
+                  <p className="text-2xl font-bold">{totalWeight.toFixed(1)}kg</p>
+                </div>
               </div>
             </div>
           </div>
@@ -241,7 +274,8 @@ export default function StaffDashboard() {
           </div>
 
           {error && (
-            <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 border border-red-200">
+            <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 border border-red-200 flex items-center gap-2">
+              <HiXMark className="text-xl" />
               {error}
             </div>
           )}
@@ -249,16 +283,16 @@ export default function StaffDashboard() {
           {/* Pickups Table */}
           {loading ? (
             <div className="text-center py-20 text-gray-500">
-              <div className="text-5xl mb-4">⏳</div>
-              <div className="text-xl">Loading pickups...</div>
+              <HiArrowPath className="text-5xl mb-4 animate-spin mx-auto text-blue-500" />
+              <div className="text-xl font-bold">Loading pickups...</div>
             </div>
           ) : pickups.length === 0 ? (
             <div className="text-center py-20 bg-white rounded-2xl border border-gray-200 shadow-lg">
-              <div className="text-6xl mb-4">📦</div>
+              <HiArchiveBox className="text-6xl mb-4 mx-auto text-gray-300" />
               <p className="text-xl text-gray-500 mb-4">No pickups found</p>
               <Link
                 href="/staff/new"
-                className="inline-block px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
+                className="inline-block px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all shadow-md"
               >
                 Create Your First Pickup
               </Link>
@@ -273,17 +307,16 @@ export default function StaffDashboard() {
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Weight</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Image</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Impact</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {pickups.map((pickup) => (
                     <tr key={pickup.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-l-4 border-transparent hover:border-blue-500">
                         {new Date(pickup.createdAt).toLocaleDateString()}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                         {pickup.category}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -291,45 +324,53 @@ export default function StaffDashboard() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {pickup.imageUrl && (
-                          <img
-                            src={pickup.imageUrl}
-                            alt="Pickup"
-                            className="h-16 w-16 object-cover rounded-lg cursor-pointer border-2 border-gray-200 hover:border-blue-500 transition-all"
-                            onClick={() => setSelectedImage(pickup.imageUrl)}
-                          />
+                          <div className="relative group/img w-14 h-14 cursor-pointer" onClick={() => setSelectedImage(pickup.imageUrl)}>
+                            <img
+                              src={pickup.imageUrl}
+                              alt="Pickup"
+                              className="w-full h-full object-cover rounded-xl border-2 border-gray-100 group-hover/img:border-blue-400 transition-all shadow-sm"
+                            />
+                            <div className="absolute inset-0 bg-black/20 rounded-xl opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition-opacity text-white">
+                                <HiEye className="text-xl" />
+                            </div>
+                          </div>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          pickup.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
-                          pickup.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
+                        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full ${
+                          pickup.status === 'APPROVED' ? 'bg-green-100 text-green-700 border border-green-200 shadow-sm' :
+                          pickup.status === 'REJECTED' ? 'bg-red-100 text-red-700 border border-red-200 shadow-sm' :
+                          'bg-amber-100 text-amber-700 border border-amber-200 shadow-sm'
                         }`}>
                           {pickup.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        <div className="max-w-xs truncate" title={getImpactMessage(pickup.category, pickup.weight)}>
-                          {getImpactMessage(pickup.category, pickup.weight)}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
+                        <div className="flex justify-end gap-3">
+                            {['PENDING', 'REJECTED'].includes(pickup.status) ? (
+                            <>
+                                <button
+                                onClick={() => router.push(`/staff/edit/${pickup.id}`)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                title="Edit Pickup"
+                                >
+                                <HiPencilSquare className="text-xl" />
+                                </button>
+                                <button
+                                onClick={() => setDeleteConfirm(pickup.id)}
+                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                title="Delete Pickup"
+                                >
+                                <HiTrash className="text-xl" />
+                                </button>
+                            </>
+                            ) : (
+                            <span className="text-xs text-gray-400 italic flex items-center gap-1">
+                                <HiCheckBadge className="text-lg text-green-500" />
+                                Verified
+                            </span>
+                            )}
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                        {pickup.status === 'PENDING' && (
-                          <>
-                            <button
-                              onClick={() => router.push(`/staff/edit/${pickup.id}`)}
-                              className="text-blue-600 hover:text-blue-900 font-semibold"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(pickup.id)}
-                              className="text-red-600 hover:text-red-900 font-semibold"
-                            >
-                              Delete
-                            </button>
-                          </>
-                        )}
                       </td>
                     </tr>
                   ))}
@@ -338,56 +379,79 @@ export default function StaffDashboard() {
             </div>
           )}
 
-          {/* Image Modal */}
-          {selectedImage && (
-            <div
-              className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50"
-              onClick={() => setSelectedImage(null)}
+          {/* Pagination */}
+          <div className="flex justify-between items-center mt-6">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-6 py-3 border-2 border-gray-300 rounded-xl text-sm font-semibold disabled:opacity-50 hover:bg-gray-50 transition-all"
             >
-              <div className="relative max-w-4xl max-h-screen p-4">
-                <button
-                  onClick={() => setSelectedImage(null)}
-                  className="absolute top-2 right-2 text-white text-2xl font-bold bg-black/50 rounded-full w-12 h-12 flex items-center justify-center hover:bg-black/70 transition-all"
-                >
-                  ×
-                </button>
-                <img
-                  src={selectedImage}
-                  alt="Full size"
-                  className="max-w-full max-h-screen object-contain rounded-2xl shadow-2xl"
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Delete Confirmation Modal */}
-          {deleteConfirm && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-              <div className="bg-white p-8 rounded-2xl max-w-md mx-4 shadow-2xl">
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">Confirm Delete</h3>
-                <p className="text-gray-600 mb-6">
-                  Are you sure you want to delete this pickup? This action cannot be undone.
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setDeleteConfirm(null)}
-                    className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 font-semibold transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => handleDelete(deleteConfirm)}
-                    className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 font-semibold transition-all"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+              Previous
+            </button>
+            <span className="text-sm font-medium text-gray-700">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-6 py-3 border-2 border-gray-300 rounded-xl text-sm font-semibold disabled:opacity-50 hover:bg-gray-50 transition-all"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] bg-white rounded-3xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="absolute top-4 right-4 text-gray-800 bg-white/80 backdrop-blur-sm rounded-full w-10 h-10 flex items-center justify-center hover:bg-white transition-all z-10 shadow-lg"
+            >
+              <HiXMark className="text-2xl" />
+            </button>
+            <img
+              src={selectedImage}
+              alt="Full size"
+              className="w-full h-full object-contain max-h-[90vh]"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-8 rounded-3xl max-w-md w-full shadow-2xl animate-in zoom-in duration-200">
+            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-6 mx-auto">
+                <HiTrash className="text-3xl text-red-600" />
+            </div>
+            <h3 className="text-2xl font-black text-center text-gray-900 mb-2">Delete Pickup?</h3>
+            <p className="text-gray-500 text-center mb-8">
+              This action cannot be undone. This collection record will be permanently removed.
+            </p>
+            <div className="flex gap-4 mt-8">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 px-6 py-4 border-2 border-gray-200 rounded-2xl text-gray-700 hover:bg-gray-50 font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm)}
+                className="flex-1 px-6 py-4 bg-red-600 text-white rounded-2xl hover:bg-red-700 font-bold transition-all shadow-lg shadow-red-200"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </ProtectedRoute>
   );
 }

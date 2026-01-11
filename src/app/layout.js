@@ -18,7 +18,7 @@ export default function RootLayout({ children }) {
       <body className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 text-gray-900">
         <AuthProvider>
           <Navbar />
-          <main className="pt-20">
+          <main>
             {children}
           </main>
           <Footer />

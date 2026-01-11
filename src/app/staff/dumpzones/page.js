@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import ProtectedRoute from '../../../components/ProtectedRoute';
@@ -42,13 +42,12 @@ export default function DumpZonesMapPage() {
   const [locationError, setLocationError] = useState('');
   const [loading, setLoading] = useState(true);
   const [L, setL] = useState(null);
-  const [zonesWithDistance, setZonesWithDistance] = useState([]);
+  const [filter, setFilter] = useState('ALL'); // ALL, DUMP_ZONE, RECYCLING_CENTER
 
   // Load Leaflet CSS and library
   useEffect(() => {
     import('leaflet').then((leaflet) => {
       setL(leaflet.default);
-      // Fix for default marker icons
       delete leaflet.default.Icon.Default.prototype._getIconUrl;
       leaflet.default.Icon.Default.mergeOptions({
         iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -57,21 +56,22 @@ export default function DumpZonesMapPage() {
       });
     });
 
-    // Load Leaflet CSS
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
     document.head.appendChild(link);
 
     return () => {
-      document.head.removeChild(link);
+      if (document.head.contains(link)) {
+        document.head.removeChild(link);
+      }
     };
   }, []);
 
   // Get user's current location
   useEffect(() => {
     if (!navigator.geolocation) {
-      setLocationError('Geolocation is not supported by your browser');
+      setLocationError('Geolocation is not supported');
       setCurrentLocation(fallbackLocation);
       setLoading(false);
       return;
@@ -79,345 +79,219 @@ export default function DumpZonesMapPage() {
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
-        const location = {
+        setCurrentLocation({
           lat: position.coords.latitude,
           lng: position.coords.longitude
-        };
-        setCurrentLocation(location);
+        });
         setLoading(false);
-        console.log('Location updated:', location);
       },
       (error) => {
-        console.error('Geolocation error:', error);
-        let errorMessage = 'Could not get your location. ';
-        
-        switch(error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage += 'Please enable location permissions.';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMessage += 'Location information is unavailable.';
-            break;
-          case error.TIMEOUT:
-            errorMessage += 'Location request timed out.';
-            break;
-          default:
-            errorMessage += 'An unknown error occurred.';
-        }
-        
-        setLocationError(errorMessage);
+        setLocationError('Could not get your location. Showing Central Delhi.');
         setCurrentLocation(fallbackLocation);
         setLoading(false);
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      }
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
 
-    return () => {
-      navigator.geolocation.clearWatch(watchId);
-    };
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  // Calculate distances when location changes
-  useEffect(() => {
-    if (currentLocation) {
-      const sorted = sortZonesByDistance(dumpZones, currentLocation);
-      setZonesWithDistance(sorted);
+  const filteredZones = useMemo(() => {
+    let zones = currentLocation ? sortZonesByDistance(dumpZones, currentLocation) : dumpZones;
+    if (filter !== 'ALL') {
+      zones = zones.filter(z => z.type === filter);
     }
-  }, [currentLocation]);
+    return zones;
+  }, [currentLocation, filter]);
 
-  // Handle zone selection
   const handleZoneClick = (zone) => {
     setSelectedZone(zone);
-    
     if (currentLocation && mapRef.current) {
-      // Generate route
       const routePoints = generateRoute(currentLocation, { lat: zone.lat, lng: zone.lng });
       setRoute(routePoints);
-
-      // Fit bounds to show route
-      const bounds = getBounds([
-        currentLocation,
-        { lat: zone.lat, lng: zone.lng }
-      ]);
-      
-      if (bounds && mapRef.current) {
-        mapRef.current.fitBounds(bounds, { padding: [100, 100] });
-      }
+      const bounds = getBounds([currentLocation, { lat: zone.lat, lng: zone.lng }]);
+      if (bounds) mapRef.current.fitBounds(bounds, { padding: [100, 100] });
     }
   };
 
-  // Handle mark as dumped
-  const handleMarkAsDumped = () => {
-    if (selectedZone) {
-      alert(`Marked ${selectedZone.name} as dumped!`);
-      setSelectedZone(null);
-      setRoute(null);
-    }
-  };
-
-  // Custom icons
-  const createCustomIcon = (type) => {
+  const createCustomIcon = (type, isSelected) => {
     if (!L) return null;
 
-    const iconHtml = type === 'truck' 
-      ? `<div class="relative">
-          <div class="absolute -inset-2 bg-blue-500 rounded-full animate-ping opacity-75"></div>
-          <div class="relative bg-blue-600 rounded-full p-3 shadow-lg">
-            <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
-              <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z"/>
-            </svg>
-          </div>
-        </div>`
-      : `<div class="relative ${selectedZone?.id === type ? 'animate-bounce' : ''}">
-          <div class="bg-green-600 rounded-full p-3 shadow-lg hover:shadow-xl transition-all">
-            <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
-            </svg>
-          </div>
-        </div>`;
+    let color = '#3B82F6'; // Default Blue
+    let iconPath = '';
+
+    if (type === 'truck') {
+      iconPath = '<path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/><path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z"/>';
+      color = '#2563EB';
+    } else if (type === 'DUMP_ZONE') {
+      iconPath = '<path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>';
+      color = '#F59E0B'; // Orange
+    } else if (type === 'RECYCLING_CENTER') {
+      iconPath = '<path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>';
+      color = '#8B5CF6'; // Purple
+    }
+
+    const html = `
+      <div class="relative ${isSelected ? 'scale-125 z-50' : ''} transition-all duration-300">
+        <div style="background-color: ${color}" class="rounded-2xl p-2.5 shadow-xl border-2 border-white text-white">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">${iconPath}</svg>
+        </div>
+        ${isSelected ? `<div style="border-top-color: ${color}" class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-t-8"></div>` : ''}
+      </div>
+    `;
 
     return L.divIcon({
-      html: iconHtml,
+      html,
       className: 'custom-marker',
-      iconSize: [40, 40],
-      iconAnchor: [20, 40],
-      popupAnchor: [0, -40]
+      iconSize: [45, 45],
+      iconAnchor: [22.5, 45],
+      popupAnchor: [0, -45]
     });
   };
 
   if (loading || !L) {
     return (
-      <ProtectedRoute allowedRoles={['STAFF']}>
-        <div className="h-screen w-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-green-50">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-xl font-semibold text-gray-700">Loading map...</p>
-            <p className="text-sm text-gray-500 mt-2">Getting your location</p>
-          </div>
+      <div className="h-screen w-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+          <p className="text-xl font-bold text-gray-900">Initializing Map...</p>
         </div>
-      </ProtectedRoute>
-    );
-  }
-
-  if (!currentLocation) {
-    return (
-      <ProtectedRoute allowedRoles={['STAFF']}>
-        <div className="h-screen w-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-orange-50">
-          <div className="max-w-md p-8 bg-white rounded-2xl shadow-2xl text-center">
-            <div className="text-6xl mb-4">📍</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Location Required</h2>
-            <p className="text-gray-600 mb-6">{locationError || 'Please enable location access to view dumping zones.'}</p>
-            <button
-              onClick={() => router.back()}
-              className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
-            >
-              Go Back
-            </button>
-          </div>
-        </div>
-      </ProtectedRoute>
+      </div>
     );
   }
 
   return (
     <ProtectedRoute allowedRoles={['STAFF']}>
-      <div className="relative h-screen w-screen overflow-hidden">
+      <div className="relative h-screen w-full overflow-hidden bg-gray-100">
+        {/* Header Controls */}
+        <div className="absolute top-6 left-6 right-6 z-[1000] flex flex-col md:flex-row gap-4 pointer-events-none">
+          <button
+            onClick={() => router.back()}
+            className="pointer-events-auto w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center hover:bg-gray-50 transition-all border border-gray-100"
+          >
+            <svg className="w-6 h-6 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          
+          <div className="pointer-events-auto flex bg-white/90 backdrop-blur-md p-1.5 rounded-2xl shadow-2xl border border-white/50">
+            {['ALL', 'DUMP_ZONE', 'RECYCLING_CENTER'].map((type) => (
+              <button
+                key={type}
+                onClick={() => setFilter(type)}
+                className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all tracking-wider ${
+                  filter === type 
+                    ? 'bg-gray-900 text-white shadow-lg' 
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                {type.replace('_', ' ')}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Map Container */}
         <MapContainer
           center={[currentLocation.lat, currentLocation.lng]}
-          zoom={14}
-          className="h-full w-full z-0"
+          zoom={13}
+          className="h-full w-full grayscale-[0.2]"
           ref={mapRef}
           zoomControl={false}
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-          {/* Staff Location Marker */}
-          <Marker 
-            position={[currentLocation.lat, currentLocation.lng]}
-            icon={createCustomIcon('truck')}
-          >
-            <Popup>
-              <div className="text-center">
-                <p className="font-bold text-blue-600">Your Location</p>
-                <p className="text-xs text-gray-600">Waste Collection Vehicle</p>
-              </div>
-            </Popup>
-          </Marker>
-
-          {/* Pulsing circle around staff location */}
+          <Marker position={[currentLocation.lat, currentLocation.lng]} icon={createCustomIcon('truck', false)} />
+          
           <Circle
             center={[currentLocation.lat, currentLocation.lng]}
-            radius={100}
-            pathOptions={{
-              color: '#3B82F6',
-              fillColor: '#3B82F6',
-              fillOpacity: 0.1,
-              weight: 2
-            }}
+            radius={200}
+            pathOptions={{ color: '#2563EB', fillColor: '#2563EB', fillOpacity: 0.1, weight: 1 }}
           />
 
-          {/* Dump Zone Markers */}
-          {zonesWithDistance.map((zone) => (
+          {filteredZones.map((zone) => (
             <Marker
               key={zone.id}
               position={[zone.lat, zone.lng]}
-              icon={createCustomIcon(zone.id)}
-              eventHandlers={{
-                click: () => handleZoneClick(zone)
-              }}
+              icon={createCustomIcon(zone.type, selectedZone?.id === zone.id)}
+              eventHandlers={{ click: () => handleZoneClick(zone) }}
             >
               <Popup>
-                <div className="min-w-[200px]">
-                  <h3 className="font-bold text-green-700 mb-2">{zone.name}</h3>
-                  <p className="text-xs text-gray-600 mb-1">{zone.category}</p>
-                  <p className="text-xs text-gray-600 mb-1">Capacity: {zone.capacity}</p>
-                  <p className="text-xs font-semibold text-blue-600">
-                    {formatDistance(zone.distance)} away
-                  </p>
+                <div className="p-1">
+                  <p className="font-black text-gray-900 text-sm mb-1">{zone.name}</p>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{zone.type.replace('_', ' ')}</p>
                 </div>
               </Popup>
             </Marker>
           ))}
 
-          {/* Route Polyline */}
           {route && (
             <Polyline
               positions={route}
-              pathOptions={{
-                color: '#10B981',
-                weight: 4,
-                opacity: 0.8,
-                dashArray: '10, 10',
-                lineCap: 'round',
-                lineJoin: 'round'
-              }}
+              pathOptions={{ color: '#2563EB', weight: 4, opacity: 0.6, dashArray: '8, 12' }}
             />
           )}
         </MapContainer>
 
-        {/* Back Button */}
-        <button
-          onClick={() => router.back()}
-          className="absolute top-4 left-4 z-10 bg-white rounded-full p-3 shadow-lg hover:shadow-xl transition-all"
-        >
-          <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        {/* Bottom Sheet */}
+        {/* Info Sidebar (Desktop) / Bottom Sheet (Mobile) */}
         {selectedZone && (
-          <div className="absolute bottom-0 left-0 right-0 z-10 bg-white rounded-t-3xl shadow-2xl p-6 animate-slideUp">
-            <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div>
-            
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">{selectedZone.name}</h2>
-                <p className="text-sm text-gray-600 mb-2">{selectedZone.address}</p>
-                <div className="flex items-center gap-4 text-sm">
-                  <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full font-medium">
-                    {selectedZone.category}
-                  </span>
-                  <span className="text-gray-600">
-                    📍 {formatDistance(selectedZone.distance)}
-                  </span>
+          <div className="absolute bottom-6 left-6 right-6 md:left-auto md:top-6 md:bottom-auto md:w-96 z-[1000] bg-white rounded-[32px] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] border border-gray-100 p-8 animate-in slide-in-from-bottom-5 fade-in duration-300">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-3 ${
+                  selectedZone.type === 'DUMP_ZONE' ? 'bg-amber-100 text-amber-700' : 'bg-purple-100 text-purple-700'
+                }`}>
+                  {selectedZone.type.replace('_', ' ')}
+                </span>
+                <h2 className="text-3xl font-black text-gray-900 leading-tight mb-2">{selectedZone.name}</h2>
+                <div className="flex items-center gap-2 text-gray-400 font-bold text-sm uppercase tracking-tighter">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                  {formatDistance(selectedZone.distance)} away
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  setSelectedZone(null);
-                  setRoute(null);
-                }}
-                className="p-2 hover:bg-gray-100 rounded-full transition-all"
-              >
-                <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+              <button onClick={() => { setSelectedZone(null); setRoute(null); }} className="p-2 hover:bg-gray-100 rounded-2xl transition-all">
+                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="bg-blue-50 p-3 rounded-xl">
-                <p className="text-xs text-gray-600 mb-1">Operating Hours</p>
-                <p className="font-semibold text-gray-900">{selectedZone.operatingHours}</p>
-              </div>
-              <div className="bg-green-50 p-3 rounded-xl">
-                <p className="text-xs text-gray-600 mb-1">Capacity</p>
-                <p className="font-semibold text-gray-900">{selectedZone.capacity}</p>
-              </div>
-            </div>
+            <p className="text-gray-500 font-medium mb-8 leading-relaxed">{selectedZone.address}</p>
 
-            <div className="mb-4">
-              <p className="text-xs text-gray-600 mb-2">Accepted Waste Types:</p>
-              <div className="flex flex-wrap gap-2">
-                {selectedZone.acceptedWaste.map((type, index) => (
-                  <span key={index} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
-                    {type}
-                  </span>
-                ))}
+            <div className="grid grid-cols-2 gap-4 mb-8 text-center">
+              <div className="bg-gray-50 p-4 rounded-3xl border border-gray-100">
+                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Capacity</p>
+                <p className="text-xl font-black text-gray-900">{selectedZone.capacity}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-3xl border border-gray-100">
+                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Hours</p>
+                <p className="text-xl font-black text-gray-900">{selectedZone.operatingHours.split(' ')[0]}</p>
               </div>
             </div>
 
             <button
-              onClick={handleMarkAsDumped}
-              className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold text-lg hover:from-green-700 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl"
+              onClick={() => { alert(`Navigation started to ${selectedZone.name}`); setSelectedZone(null); setRoute(null); }}
+              className="w-full py-5 bg-gray-900 text-white rounded-[24px] font-black text-lg hover:bg-gray-800 transition-all shadow-2xl hover:shadow-gray-900/40 flex items-center justify-center gap-3"
             >
-              Mark as Dumped ✓
+              Start Navigation
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
             </button>
           </div>
         )}
 
-        {/* Zone List (when no zone selected) */}
-        {!selectedZone && zonesWithDistance.length > 0 && (
-          <div className="absolute bottom-4 left-4 right-4 z-10 bg-white rounded-2xl shadow-xl p-4 max-h-48 overflow-y-auto">
-            <h3 className="font-bold text-gray-900 mb-3">Nearby Dump Zones</h3>
-            <div className="space-y-2">
-              {zonesWithDistance.slice(0, 3).map((zone) => (
-                <button
-                  key={zone.id}
-                  onClick={() => handleZoneClick(zone)}
-                  className="w-full text-left p-3 bg-gray-50 hover:bg-green-50 rounded-xl transition-all"
-                >
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-semibold text-gray-900 text-sm">{zone.name}</p>
-                      <p className="text-xs text-gray-600">{zone.category}</p>
-                    </div>
-                    <span className="text-xs font-semibold text-blue-600">
-                      {formatDistance(zone.distance)}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Custom CSS for animations */}
+        {/* Global Styles for Marker Overlays */}
         <style jsx global>{`
-          @keyframes slideUp {
-            from {
-              transform: translateY(100%);
-            }
-            to {
-              transform: translateY(0);
-            }
-          }
-          .animate-slideUp {
-            animation: slideUp 0.3s ease-out;
-          }
           .custom-marker {
-            background: none;
-            border: none;
+            background: none !important;
+            border: none !important;
+          }
+          .leaflet-container {
+            font-family: inherit;
+          }
+          .leaflet-popup-content-wrapper {
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+          }
+          .leaflet-popup-tip {
+            display: none;
           }
         `}</style>
       </div>
