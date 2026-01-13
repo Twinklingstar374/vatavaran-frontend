@@ -16,8 +16,7 @@ import {
   HiSparkles
 } from "react-icons/hi2";
 
-const CLOUDINARY_CLOUD_NAME = 'dkgxwotil';
-const CLOUDINARY_UPLOAD_PRESET = 'ml_default';
+
 
 export default function CreatePickupPage() {
   const [formData, setFormData] = useState({
@@ -106,17 +105,19 @@ export default function CreatePickupPage() {
     try {
       const formData = new FormData();
       formData.append('file', imageFile);
-      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
-        method: 'POST',
-        body: formData,
+      
+      const response = await api.post('/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
-      const data = await response.json();
-      setUploadedImageUrl(data.secure_url);
+      
+      setUploadedImageUrl(response.data.url);
       setUploading(false);
-      return data.secure_url;
+      return response.data.url;
     } catch (err) {
-      setError('Image upload failed.');
+      console.error('Upload error:', err);
+      setError('Image upload failed. Please try again.');
       setUploading(false);
       return null;
     }

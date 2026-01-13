@@ -15,8 +15,7 @@ import {
   HiArrowPath
 } from "react-icons/hi2";
 
-const CLOUDINARY_CLOUD_NAME = 'dkgxwotil';
-const CLOUDINARY_UPLOAD_PRESET = 'ml_default';
+
 
 export default function EditPickupPage() {
   const params = useParams();
@@ -80,22 +79,19 @@ export default function EditPickupPage() {
     setUploading(true);
     const formData = new FormData();
     formData.append('file', imageFile);
-    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
 
     try {
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-        {
-          method: 'POST',
-          body: formData,
-        }
-      );
-      const data = await response.json();
+      const response = await api.post('/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
       setUploading(false);
-      return data.secure_url;
+      return response.data.url;
     } catch (err) {
-      console.error('Cloudinary upload error:', err);
-      setError('Image upload failed.');
+      console.error('Upload error:', err);
+      setError('Image upload failed. Please try again.');
       setUploading(false);
       return null;
     }

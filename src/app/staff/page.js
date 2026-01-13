@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import api from '@/utils/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import UserProfileDropdown from '@/components/UserProfileDropdown';
+import { useAuth } from '@/context/AuthContext';
 import {
   HiMapPin,
   HiPlus,
@@ -22,6 +24,7 @@ import {
 } from "react-icons/hi2";
 
 export default function StaffDashboard() {
+  const { user } = useAuth();
   const [pickups, setPickups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -118,7 +121,7 @@ export default function StaffDashboard() {
               <h1 className="text-5xl font-black text-gray-900 tracking-tight mb-2">My Dashboard</h1>
               <p className="text-gray-500 font-medium">Manage your daily pickups and rewards</p>
             </div>
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-wrap gap-4 items-center">
               <Link
                 href="/staff/dumpzones"
                 className="group px-7 py-4 bg-white text-gray-900 rounded-2xl font-bold hover:bg-gray-50 transition-all shadow-md hover:shadow-lg flex items-center gap-3 border border-gray-200"
@@ -133,6 +136,7 @@ export default function StaffDashboard() {
                 <HiPlus className="text-2xl group-hover:rotate-90 transition-transform" />
                 Log Pickup
               </Link>
+              <UserProfileDropdown user={user} />
             </div>
           </div>
 

@@ -1,7 +1,9 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import api from '@/utils/api';
 import { 
   HiGlobeAmericas, 
   HiMapPin, 
@@ -11,11 +13,88 @@ import {
   HiArrowPathRoundedSquare, 
   HiSparkles,
   HiUsers,
-  HiArrowRight
+  HiArrowRight,
+  HiCube,
+  HiTrophy
 } from "react-icons/hi2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement
+} from 'chart.js';
+import { Bar, Doughnut } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement
+);
 
 export default function HomePage() {
   const { user } = useAuth();
+  const [pickups, setPickups] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      fetchAnalytics();
+    }
+  }, [user]);
+
+  const fetchAnalytics = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/pickups', { params: { limit: 1000 } });
+      setPickups(response.data.pickups || []);
+    } catch (err) {
+      console.error('Failed to load analytics data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate analytics
+  const totalWeight = pickups.reduce((sum, p) => sum + p.weight, 0);
+  const approvedCount = pickups.filter(p => p.status === 'APPROVED').length;
+  
+  // Category breakdown
+  const categoryStats = {};
+  pickups.forEach(p => {
+    categoryStats[p.category] = (categoryStats[p.category] || 0) + p.weight;
+  });
+  
+  const categoryData = Object.entries(categoryStats).map(([category, weight]) => ({
+    category,
+    weight: weight.toFixed(1)
+  })).sort((a, b) => b.weight - a.weight);
+
+  // Staff leaderboard
+  const staffStats = {};
+  pickups.forEach(p => {
+    if (!staffStats[p.staffId]) {
+      staffStats[p.staffId] = {
+        name: p.staff?.name || `Staff ${p.staffId}`,
+        weight: 0
+      };
+    }
+    staffStats[p.staffId].weight += p.weight;
+  });
+  
+  const leaderboard = Object.entries(staffStats)
+    .map(([id, stats]) => ({ id, ...stats }))
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 5);
+
+  const activeStaffCount = Object.keys(staffStats).length;
 
   return (
     <div className="min-h-screen w-full bg-[#F8FAFC]">
@@ -78,6 +157,158 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* Analytics Section - Only for logged-in users */}
+      {user && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 border-t border-gray-100">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-4 tracking-tight">
+              Real-Time Analytics
+            </h2>
+            <p className="text-gray-500 font-medium text-lg">
+              Track performance and environmental impact across the platform
+            </p>
+          </div>
+
+          {/* Metrics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+            <div className="bg-white rounded-3xl shadow-lg p-8 border border-gray-100 hover:shadow-xl transition-all">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center">
+                  <HiChartBar className="text-2xl text-blue-600" />
+                </div>
+              </div>
+              <p className="text-4xl font-black text-gray-900 mb-1">{pickups.length}</p>
+              <p className="text-sm font-bold text-gray-500 uppercase">Total Pickups</p>
+            </div>
+
+            <div className="bg-white rounded-3xl shadow-lg p-8 border border-gray-100 hover:shadow-xl transition-all">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center">
+                  <HiCube className="text-2xl text-emerald-600" />
+                </div>
+              </div>
+              <p className="text-4xl font-black text-gray-900 mb-1">{totalWeight.toFixed(0)}kg</p>
+              <p className="text-sm font-bold text-gray-500 uppercase">Total Weight</p>
+            </div>
+
+            <div className="bg-white rounded-3xl shadow-lg p-8 border border-gray-100 hover:shadow-xl transition-all">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center">
+                  <HiCheckBadge className="text-2xl text-purple-600" />
+                </div>
+              </div>
+              <p className="text-4xl font-black text-gray-900 mb-1">
+                {pickups.length > 0 ? ((approvedCount / pickups.length) * 100).toFixed(0) : 0}%
+              </p>
+              <p className="text-sm font-bold text-gray-500 uppercase">Approval Rate</p>
+            </div>
+
+            <div className="bg-white rounded-3xl shadow-lg p-8 border border-gray-100 hover:shadow-xl transition-all">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center">
+                  <HiUsers className="text-2xl text-amber-600" />
+                </div>
+              </div>
+              <p className="text-4xl font-black text-gray-900 mb-1">{activeStaffCount}</p>
+              <p className="text-sm font-bold text-gray-500 uppercase">Active Staff</p>
+            </div>
+          </div>
+
+          {/* Charts */}
+          {!loading && pickups.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+              {/* Waste Category Distribution */}
+              <div className="bg-white rounded-[40px] shadow-xl p-10 border border-gray-100 flex flex-col h-[500px]">
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Waste Distribution</h3>
+                  <span className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full font-black uppercase tracking-widest border border-blue-100">By Category</span>
+                </div>
+                <div className="flex-grow flex items-center justify-center">
+                  <Doughnut 
+                    data={{
+                      labels: categoryData.map(c => c.category),
+                      datasets: [{
+                        data: categoryData.map(c => c.weight),
+                        backgroundColor: [
+                          'rgba(37, 99, 235, 0.9)',
+                          'rgba(16, 185, 129, 0.9)',
+                          'rgba(245, 158, 11, 0.9)',
+                          'rgba(244, 63, 94, 0.9)',
+                          'rgba(139, 92, 246, 0.9)',
+                        ],
+                        borderColor: '#ffffff',
+                        borderWidth: 4,
+                        hoverOffset: 20
+                      }]
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: 'bottom',
+                          labels: {
+                            padding: 20,
+                            usePointStyle: true,
+                            font: { weight: 'bold', family: 'Inter' }
+                          }
+                        }
+                      },
+                      cutout: '65%'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Top Performers */}
+              <div className="bg-white rounded-[40px] shadow-xl p-10 border border-gray-100 flex flex-col h-[500px]">
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Top Performers</h3>
+                  <span className="text-[10px] bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full font-black uppercase tracking-widest border border-emerald-100">By Weight (KG)</span>
+                </div>
+                <div className="flex-grow flex items-center justify-center">
+                  <Bar 
+                    data={{
+                      labels: leaderboard.map(s => s.name.split(' ')[0]),
+                      datasets: [{
+                        label: 'Weight Collected',
+                        data: leaderboard.map(s => s.weight),
+                        backgroundColor: 'rgba(37, 99, 235, 0.8)',
+                        borderRadius: 12,
+                        barThickness: 40
+                      }]
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { display: false }
+                      },
+                      scales: {
+                        y: {
+                          grid: { display: false },
+                          ticks: { font: { weight: 'bold' } }
+                        },
+                        x: {
+                          grid: { display: false },
+                          ticks: { font: { weight: 'bold' } }
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {loading && (
+            <div className="text-center py-20">
+              <div className="text-gray-400 font-bold">Loading analytics...</div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Features Grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 border-t border-gray-100">

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { 
   HiBars3, 
   HiXMark, 
@@ -17,14 +17,119 @@ import {
   HiBriefcase,
   HiMapPin,
   HiSparkles,
-  HiGlobeAmericas
+  HiGlobeAmericas,
+  HiCog6Tooth,
+  HiChevronDown
 } from "react-icons/hi2";
+
+// User Profile Dropdown Component
+function UserProfileDropdown({ user, role, onLogout }) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const getInitials = (name) => {
+    if (!name) return user.email?.substring(0, 2).toUpperCase() || 'U';
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  return (
+    <div className="relative ml-4" ref={dropdownRef}>
+      <button
+        onClick={() => setDropdownOpen(!dropdownOpen)}
+        className="flex items-center gap-3 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all border border-gray-200"
+      >
+        {/* Avatar with Initials */}
+        <div className="w-9 h-9 bg-blue-600 text-white rounded-lg flex items-center justify-center font-black text-sm shadow-md">
+          {getInitials(user.name)}
+        </div>
+        
+        {/* User Info */}
+        <div className="text-left">
+          <div className="text-sm font-bold leading-tight text-gray-900">
+            {user.name || user.email?.split('@')[0]}
+          </div>
+          <div className="text-xs text-blue-600 font-bold">{role}</div>
+        </div>
+
+        {/* Dropdown Arrow */}
+        <HiChevronDown className={`text-lg text-gray-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Dropdown Menu */}
+      {dropdownOpen && (
+        <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+          {/* User Info Section */}
+          <div className="px-6 py-4 bg-gradient-to-br from-blue-50 to-white border-b border-gray-100">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-12 h-12 bg-blue-600 text-white rounded-xl flex items-center justify-center font-black text-base shadow-md">
+                {getInitials(user.name)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-black text-gray-900 truncate">
+                  {user.name || 'User'}
+                </div>
+                <div className="text-xs text-gray-500 font-medium truncate">{user.email}</div>
+              </div>
+            </div>
+            <div className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold">
+              {role}
+            </div>
+          </div>
+
+          {/* Menu Items */}
+          <div className="py-2">
+            <Link
+              href="/settings"
+              onClick={() => setDropdownOpen(false)}
+              className="flex items-center gap-3 px-6 py-3 text-gray-700 hover:bg-gray-50 transition-colors group"
+            >
+              <HiCog6Tooth className="text-xl text-gray-400 group-hover:text-blue-600 transition-colors" />
+              <span className="font-bold text-sm">Settings</span>
+            </Link>
+
+            <button
+              onClick={() => {
+                setDropdownOpen(false);
+                onLogout();
+              }}
+              className="w-full flex items-center gap-3 px-6 py-3 text-red-600 hover:bg-red-50 transition-colors group"
+            >
+              <HiArrowRightOnRectangle className="text-xl group-hover:translate-x-0.5 transition-transform" />
+              <span className="font-bold text-sm">Logout</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Navbar() {
   const { user, role, logout } = useAuth();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 Navbar Debug:', { user, role, hasUser: !!user, hasRole: !!role });
+  }, [user, role]);
+
 
   const navLinks = [
     { name: 'Home', href: '/', icon: HiHome },
@@ -101,19 +206,7 @@ export default function Navbar() {
               })}
 
               {user ? (
-                <div className="flex items-center gap-4 ml-4 border-l border-gray-100 pl-4">
-                  <div className="flex flex-col items-end">
-                    <span className="text-[10px] font-black text-blue-600 tracking-widest uppercase bg-blue-50 px-2 py-0.5 rounded-md">{role}</span>
-                    <span className="text-sm font-bold text-gray-900">{user.email?.split('@')[0]}</span>
-                  </div>
-                  <button
-                    onClick={() => setShowLogoutModal(true)}
-                    className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all group border border-red-100"
-                    title="Logout"
-                  >
-                    <HiArrowRightOnRectangle className="text-xl group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </div>
+                <UserProfileDropdown user={user} role={role} onLogout={() => setShowLogoutModal(true)} />
               ) : (
                 <Link
                   href="/login"
@@ -159,16 +252,26 @@ export default function Navbar() {
               );
             })}
             {user ? (
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  setShowLogoutModal(true);
-                }}
-                className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl text-red-600 bg-red-50 font-bold transition-all mt-4 border border-red-100"
-              >
-                <HiArrowRightOnRectangle className="text-xl" />
-                Logout
-              </button>
+              <>
+                <Link
+                  href="/settings"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-4 rounded-2xl text-gray-600 hover:bg-gray-100 font-bold transition-all"
+                >
+                  <HiCog6Tooth className="text-xl" />
+                  Settings
+                </Link>
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    setShowLogoutModal(true);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl text-red-600 bg-red-50 font-bold transition-all mt-4 border border-red-100"
+                >
+                  <HiArrowRightOnRectangle className="text-xl" />
+                  Logout
+                </button>
+              </>
             ) : (
               <Link
                 href="/login"
